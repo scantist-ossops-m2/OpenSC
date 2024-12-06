@@ -266,11 +266,15 @@ sc_oberthur_read_file(struct sc_pkcs15_card *p15card, const char *in_path,
 		rv = sc_read_binary(card, 0, *out, sz, 0);
 	}
 	else	{
-		int rec;
-		int offs = 0;
-		int rec_len = file->record_length;
+		size_t rec;
+		size_t offs = 0;
+		size_t rec_len = file->record_length;
 
 		for (rec = 1; ; rec++)   {
+			if (rec > file->record_count) {
+				rv = 0;
+				break;
+			}
 			rv = sc_read_record(card, rec, *out + offs + 2, rec_len, SC_RECORD_BY_REC_NR);
 			if (rv == SC_ERROR_RECORD_NOT_FOUND)   {
 				rv = 0;
@@ -582,7 +586,10 @@ sc_pkcs15emu_oberthur_add_pubkey(struct sc_pkcs15_card *p15card,
 	if (offs + 2 > info_len)
 		LOG_TEST_RET(ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED, "Failed to add public key: no 'Label'");
 	len = *(info_blob + offs + 1) + *(info_blob + offs) * 0x100;
-	if (len)   {
+	if (offs + 2 + len > info_len) {
+		free(info_blob);
+		LOG_TEST_RET(ctx, SC_ERROR_INVALID_DATA, "Failed to add public key: invalid 'Label' length");
+	} else if (len) {
 		if (len > sizeof(key_obj.label) - 1)
 			len = sizeof(key_obj.label) - 1;
 		memcpy(key_obj.label, info_blob + offs + 2, len);
